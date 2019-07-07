@@ -1,0 +1,15 @@
+[package]
+name = "clgame"
+version = "0.1.0"
+authors = ["Charlie"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+
+[dependencies]
+piston = "*"
+pistoncore-glutin_window = "*"
+piston2d-graphics = "0.32.0"
+piston2d-opengl_graphics = "0.65.0"
+
