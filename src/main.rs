@@ -28,7 +28,8 @@ fn main() {
     let mut gl = GlGraphics::new(opengl);
 
     let gameboard_view_settings = GameboardViewSettings::new();
-    let mut gameboard_controller = GameboardController::new(Gameboard::new(gameboard_view_settings.size));
+    let mut gameboard_controller =
+        GameboardController::new(Gameboard::new(gameboard_view_settings.size));
     let gameboard_view = GameboardView::new(gameboard_view_settings);
 
     while let Some(e) = events.next(&mut window) {

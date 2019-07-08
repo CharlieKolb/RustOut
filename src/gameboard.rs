@@ -7,8 +7,9 @@ pub enum Direction {
     Right,
 }
 
-trait GameObject {
-    fn update(&mut self, delta: f64);
+pub enum CollisionType {
+    Wall,
+    Movable,
 }
 
 pub struct Rectangle {
@@ -55,7 +56,6 @@ impl Vec2 {
         self.dx = self.dx / len * new_length;
         self.dy = self.dy / len * new_length;
         self
-        
     }
 }
 
@@ -75,12 +75,28 @@ impl Body {
     }
 }
 
+trait GameObject {
+    fn get_body(&mut self) -> &mut Body;
+    fn update(&mut self, delta: f64);
+
+    fn collision_type(&self) -> CollisionType;
+    fn on_collision(&mut self, other: &mut impl GameObject);
+}
+
 pub struct Player {
     pub body: Body,
     pub direction: Direction,
 }
 
+pub struct Ball {
+    pub body: Body,
+}
+
 impl GameObject for Player {
+    fn get_body(&mut self) -> &mut Body {
+        return &mut self.body;
+    }
+
     fn update(&mut self, delta: f64) {
         match self.direction {
             Direction::Left => {
@@ -94,15 +110,52 @@ impl GameObject for Player {
             Direction::Idle => (),
         }
     }
-}
 
-pub struct Ball {
-    pub body: Body,
+    fn collision_type(&self) -> CollisionType {
+        CollisionType::Wall
+    }
+
+    fn on_collision(&mut self, other: &mut impl GameObject) {
+        match other.collision_type() {
+            CollisionType::Wall => {
+                self.body.velocity = Vec2::new(0.0, 0.0);
+                other.get_body().velocity = Vec2::new(0.0, 0.0);
+            }
+            CollisionType::Movable => {
+                let other_body = other.get_body();
+
+                if other_body.hitbox.intersects(&self.body.hitbox) {
+                    let half_width = self.body.hitbox.w / 2.0;
+
+                    // -1 for left edge, 0 for middle, 1 for right edge
+                    let scaled = (f64::abs(
+                        other_body.hitbox.x + other_body.hitbox.w / 2.0 - self.body.hitbox.x,
+                    ) / half_width)
+                        - 1.0;
+
+                    other_body.velocity =
+                        Vec2::new(scaled, -1.0).set_length(other_body.velocity.length());
+                }
+            }
+        }
+    }
 }
 
 impl GameObject for Ball {
+    fn get_body(&mut self) -> &mut Body {
+        return &mut self.body;
+    }
+
     fn update(&mut self, delta: f64) {
         self.body.apply_velocity(delta)
+    }
+
+    fn collision_type(&self) -> CollisionType {
+        CollisionType::Movable
+    }
+
+    fn on_collision(&mut self, other: &mut impl GameObject) {
+        // todo
     }
 }
 
@@ -138,20 +191,19 @@ impl Gameboard {
         self.player.update(delta);
         self.ball.update(delta);
 
-        let ball_body = &mut self.ball.body;
-
-        if ball_body.hitbox.intersects(&self.player.body.hitbox) {
-            let half_width = self.player.body.hitbox.w / 2.0;
-
-            // -1 for left edge, 0 for middle, 1 for right edge
-            let scaled = (f64::abs(ball_body.hitbox.x + ball_body.hitbox.w/2.0 - self.player.body.hitbox.x) / half_width) - 1.0;
-
-            ball_body.velocity = Vec2::new(scaled, -1.0).set_length(ball_body.velocity.length());
+        if self.player.body.hitbox.intersects(&self.ball.body.hitbox) {
+            self.player.on_collision(&mut self.ball);
         }
-        else if ball_body.hitbox.y <= 0.0 {
+
+
+
+        let ref mut ball_body = &mut self.ball.body;
+
+
+        // ToDo: Add walls to borders of screen
+        if ball_body.hitbox.y <= 0.0 {
             ball_body.velocity.dy *= -1.025;
-        }
-        else if  ball_body.hitbox.x < 0.0 || ball_body.hitbox.x + ball_body.hitbox.w > self.size {
+        } else if ball_body.hitbox.x < 0.0 || ball_body.hitbox.x + ball_body.hitbox.w > self.size {
             ball_body.velocity.dx *= -1.025;
         }
     }

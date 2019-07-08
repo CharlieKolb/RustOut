@@ -42,14 +42,8 @@ impl GameboardView {
         GameboardView { settings }
     }
 
-    fn draw_hitbox<G: Graphics>(
-        &self,
-        color: Color,
-        rect: [f64; 4],
-        c: &Context,
-        g: &mut G,
-    ) {
-        use graphics::{ Rectangle };
+    fn draw_hitbox<G: Graphics>(&self, color: Color, rect: [f64; 4], c: &Context, g: &mut G) {
+        use graphics::Rectangle;
 
         Rectangle::new(color).draw(rect, &c.draw_state, c.transform, g);
     }
@@ -78,7 +72,17 @@ impl GameboardView {
                 hitbox.h,
             ]
         };
-        self.draw_hitbox([1.0, 0.0, 0.0, 1.0], rect_of_hitbox(&board.player.body.hitbox), &c, g);
-        self.draw_hitbox([1.0, 0.0, 0.0, 1.0], rect_of_hitbox(&board.ball.body.hitbox), &c, g);
+        self.draw_hitbox(
+            [1.0, 0.0, 0.0, 1.0],
+            rect_of_hitbox(&board.player.body.hitbox),
+            &c,
+            g,
+        );
+        self.draw_hitbox(
+            [1.0, 0.0, 0.0, 1.0],
+            rect_of_hitbox(&board.ball.body.hitbox),
+            &c,
+            g,
+        );
     }
 }
