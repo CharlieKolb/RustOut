@@ -11,6 +11,10 @@ impl Vec2 {
         Self { x, y }
     }
 
+    pub fn zero() -> Self {
+        Self { x: 0.0, y: 0.0 }
+    }
+
     pub fn length(&self) -> f64 {
         f64::sqrt(f64::powf(self.x, 2.0) + f64::powf(self.y, 2.0))
     }
