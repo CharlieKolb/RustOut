@@ -13,6 +13,7 @@ pub use crate::gameboard::Gameboard;
 pub use crate::gameboard_controller::GameboardController;
 pub use crate::gameboard_view::{GameboardView, GameboardViewSettings};
 
+mod vec2;
 mod gameboard;
 mod gameboard_controller;
 mod gameboard_view;
