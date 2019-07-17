@@ -25,7 +25,11 @@ fn main() {
         .exit_on_esc(true);
     let mut window: GlutinWindow = settings.build().expect("Could not create window");
 
-    let mut events = Events::new(EventSettings::new());
+    let mut event_settings = EventSettings::new();
+    event_settings.set_max_fps(144);
+    event_settings.set_ups(288);
+
+    let mut events = Events::new(event_settings);
     let mut gl = GlGraphics::new(opengl);
 
     let gameboard_view_settings = GameboardViewSettings::new();

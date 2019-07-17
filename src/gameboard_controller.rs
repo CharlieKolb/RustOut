@@ -24,7 +24,7 @@ impl GameboardController {
         use piston::input::{Button, ButtonState, Input, Key, Loop, UpdateArgs};
         match e {
             Event::Input(Input::Button(button_args), _) => {
-                println!("{:?}", e);
+                // println!("{:?}", e);
                 let pressed = button_args.state == ButtonState::Press;
                 if let Button::Keyboard(key) = button_args.button {
                     match key {
@@ -53,7 +53,7 @@ impl GameboardController {
                 }
             }
             Event::Loop(Loop::Update(UpdateArgs { dt })) => {
-                println!("{:?}", e);
+                // println!("{:?}", e);
                 self.gameboard.update(*dt);
             }
             _ => (),

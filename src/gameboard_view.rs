@@ -66,10 +66,10 @@ impl GameboardView {
 
         let rect_of_hitbox = |hitbox: &gameboard::Rectangle| {
             [
-                self.settings.position[0] + hitbox.x,
-                self.settings.position[1] + hitbox.y,
-                hitbox.w,
-                hitbox.h,
+                self.settings.position[0] + hitbox.position.x,
+                self.settings.position[1] + hitbox.position.y,
+                hitbox.dimension.x,
+                hitbox.dimension.y,
             ]
         };
         self.draw_hitbox(
