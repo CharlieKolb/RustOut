@@ -496,8 +496,12 @@ impl Gameboard {
         }
 
         for block in &mut self.blocks {
+            let before = self.ball.body.velocity.clone();
             if self.ball.body.hitbox.intersects(&block.body.hitbox) {
                 self.ball.on_collision(block)
+            }
+            if before != self.ball.body.velocity {
+                break;
             }
         }
     }
