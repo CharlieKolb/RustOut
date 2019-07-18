@@ -36,6 +36,16 @@ pub struct GameboardView {
     pub settings: GameboardViewSettings,
 }
 
+fn u8_color_to_f32_color (color: [u8; 4]) -> [f32; 4] {
+    [
+        color[0] as f32 / 255.,
+        color[1] as f32 / 255.,
+        color[2] as f32 / 255.,
+        color[3] as f32 / 255.,
+
+    ]
+}
+
 impl GameboardView {
     /// Creates a new gameboard view.
     pub fn new(settings: GameboardViewSettings) -> GameboardView {
@@ -84,5 +94,14 @@ impl GameboardView {
             &c,
             g,
         );
+
+        for block in &board.blocks {
+            self.draw_hitbox(
+                u8_color_to_f32_color(block.color),
+                rect_of_hitbox(&block.body.hitbox),
+                &c,
+                g,
+            );
+        }
     }
 }

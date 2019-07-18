@@ -24,6 +24,7 @@ pub enum CollisionType {
     Player,
     Wall,
     Movable,
+    Block,
 }
 
 #[derive(Debug)]
@@ -114,6 +115,8 @@ trait GameObject {
 
     fn collision_type(&self) -> CollisionType;
     fn on_collision(&mut self, other: &mut GameObject);
+
+    fn despawn(&mut self);
 }
 
 pub struct Player {
@@ -253,6 +256,8 @@ impl GameObject for Player {
             _ => (),
         }
     }
+
+    fn despawn(&mut self) {}
 }
 
 impl GameObject for Ball {
@@ -284,11 +289,25 @@ impl GameObject for Ball {
                     self.body.velocity = self.body.velocity.reflect_on(&closer_normal);
                 }
             }
+            CollisionType::Block => {
+                let colliding_wall_opt =
+                    get_first_colliding_wall(&self.body, &other.get_body().hitbox);
+
+                if let Some(((w1, w2), _)) = colliding_wall_opt {
+                    let wall_vec = w2 - w1;
+                    let closer_normal = wall_vec.get_closer_normal(&self.body.prev_position);
+                    self.body.velocity = self.body.velocity.reflect_on(&closer_normal);
+
+                    other.despawn();
+                }
+            }
             CollisionType::Player => {
                 // Player handles collision
             }
         }
     }
+
+    fn despawn(&mut self) {}
 }
 
 pub struct Wall {
@@ -311,6 +330,109 @@ impl GameObject for Wall {
     }
 
     fn on_collision(&mut self, _: &mut GameObject) {}
+
+    fn despawn(&mut self) {}
+}
+
+pub struct Block {
+    pub body: Body,
+    pub color: Color
+}
+
+impl Block {
+    fn new(position: Vec2, dimension: Vec2, color: Color) -> Self {
+        Self {
+            body: Body::new(
+                Rectangle::new(position.x, position.y, dimension.x, dimension.y),
+                Vec2::zero(),
+            ),
+            color,
+        }
+    }
+
+    fn make_factory(dimension: Vec2, color: Color) -> impl Fn(Vec2) -> Self {
+        move |position: Vec2| Self::new(position, dimension, color)
+    } 
+}
+
+impl GameObject for Block {
+    fn get_prev_position(&self) -> &Vec2 {
+        &self.body.prev_position
+    }
+
+    fn get_body(&mut self) -> &mut Body {
+        return &mut self.body;
+    }
+
+    fn update(&mut self, _: f64) {}
+
+    fn collision_type(&self) -> CollisionType {
+        CollisionType::Block
+    }
+
+    fn on_collision(&mut self, _: &mut GameObject) {}
+
+    fn despawn(&mut self) {
+        self.body.hitbox.position = Vec2::new(-1000., -1000.)
+    }
+}
+
+type Color = [u8; 4];
+
+enum ColorSettings {
+    Single(Color),
+    PerRow(Vec<Color>),
+    PerBlock(Vec<Vec<Color>>),
+}
+
+struct BlockLayout {
+    pub blocks: Vec<Block>,
+}
+
+impl BlockLayout {
+    fn from_rows(start_position: Vec2, dimension: Vec2, color_settings: ColorSettings, blocks_per_row: u32, rows: u32) -> Vec<Block> {
+        // Note that we maintain a matrix internally, this is to support row based manipulation in the future, otherwise we could just append instead of push new rows
+        match color_settings {
+            ColorSettings::Single(c) => {
+                let make = Block::make_factory(dimension, c);
+                let mut blocks: Vec<Vec<Block>> = Vec::new();
+                
+                for i in 0..rows {
+                    let mut curr = Vec::new();
+                    for j in 0..blocks_per_row {
+                        curr.push(make(start_position + Vec2::new(j as f64 * (dimension.x + 2.), i as f64 * (dimension.y + 2.))));
+                    }
+                    blocks.push(curr);
+                }
+
+                blocks.into_iter().flatten().collect()
+            } 
+            ColorSettings::PerRow(c_vec) => {
+                if c_vec.len() != rows as usize {
+                    println!("BlockLayout::from_rows called with PerRow color setting with inconsistent amount of rows for color vector and rows input");
+                    return Vec::new();
+                }
+
+                let mut blocks: Vec<Vec<Block>> = Vec::new();
+
+
+                for (i, c) in c_vec.into_iter().enumerate() {
+                    let mut curr = Vec::new();
+                    let make = Block::make_factory(dimension, c);
+                    for j in 0..blocks_per_row {
+                        curr.push(make(start_position + Vec2::new(j as f64 * dimension.x, i as f64 * dimension.y)));
+                    }
+                    blocks.push(curr);
+                }
+
+                blocks.into_iter().flatten().collect()
+            }
+            _ => {
+                println!("BlockLayout::from_rows called with a ColorSetting which is not yet supported");
+                Vec::new()
+            }
+        }
+    }
 }
 
 /// Stores game board information.
@@ -318,6 +440,7 @@ pub struct Gameboard {
     pub player: Player,
     pub ball: Ball,
     pub walls: [Wall; 3],
+    pub blocks: Vec<Block>,
     pub size: f64,
 }
 
@@ -349,6 +472,7 @@ impl Gameboard {
                     body: Body::new(Rectangle::new(size, -10., 10., size + 10.), Vec2::zero()),
                 },
             ],
+            blocks: BlockLayout::from_rows(Vec2::new(20., 20.), Vec2::new(40., 10.), ColorSettings::Single([255, 255, 0, 255]), 8, 10),
             size,
         }
     }
@@ -368,6 +492,12 @@ impl Gameboard {
 
             if self.player.body.hitbox.intersects(&wall.body.hitbox) {
                 self.player.on_collision(wall)
+            }
+        }
+
+        for block in &mut self.blocks {
+            if self.ball.body.hitbox.intersects(&block.body.hitbox) {
+                self.ball.on_collision(block)
             }
         }
     }
