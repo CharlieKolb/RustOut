@@ -1,5 +1,6 @@
-use std::f64;
-use std::ops;
+use std::{ f64, ops };
+
+static CMP_EPSILON : f64 = 0.000000000000001f64;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Vec2 {
@@ -109,7 +110,7 @@ impl Vec2 {
 
     pub fn reflect_on(&self, normal: &Vec2) -> Vec2 {
         let normed = normal.to_norm();
-        *self - 2. * normed * self.dot(normal)
+        *self - 2. * normed * self.dot(&normed)
     }
 
     // Angle from 0; Pi
@@ -152,6 +153,10 @@ impl Vec2 {
 
     pub fn cross(&self, o: &Vec2) -> f64 {
         self.x * o.y - self.y * o.x
+    }
+
+    pub fn equalish(&self, other: &Self) -> bool {
+        (self.x - other.x).abs() < CMP_EPSILON && (self.y - other.y).abs() < CMP_EPSILON
     }
 }
 
@@ -305,6 +310,7 @@ impl ops::DivAssign<f64> for Vec2 {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
@@ -375,10 +381,9 @@ mod tests {
     #[test]
     fn test_mirror_on_01() {
         let mirror = Vec2::new(1., 1.);
-
         let input = Vec2::new(2., 0.);
-        let output = Vec2::new(0., 2.);
+        let expected = Vec2::new(0., -2.);
 
-        assert_eq!(input.mirror_on(&mirror), output);
+        assert!(input.reflect_on(&mirror).equalish(&expected));
     }
 }

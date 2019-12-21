@@ -21,7 +21,6 @@ pub enum Direction {
 }
 
 pub enum CollisionType {
-    Player,
     Wall,
     Movable,
     Block,
@@ -78,10 +77,8 @@ impl Rectangle {
         .into_iter()
         .filter_map(|(p1, p2)| {
             let (_, point_opt) = vec2::segment_segment_distance(&p1, &p2, start, end);
-            match point_opt {
-                Some(point) => Some(((p1, p2), point)),
-                None => None,
-            }
+            if let Some(point) = point_opt { Some(((p1, p2), point)) }
+            else { None }
         })
         .collect()
     }
@@ -128,7 +125,7 @@ pub struct Ball {
     pub body: Body,
 }
 
-// ToDo: Duplicate code; how to propegate the intersection as option? Probably use with fold to find the closest one instead?
+// ToDo: Duplicate code; how to propagate the intersection as option? Probably use with fold to find the closest one instead?
 #[allow(dead_code)]
 fn get_shortest_distance_segment(
     point: &Vec2,
@@ -266,7 +263,7 @@ impl GameObject for Ball {
     }
 
     fn get_body(&mut self) -> &mut Body {
-        return &mut self.body;
+        &mut self.body
     }
 
     fn update(&mut self, delta: f64) {
@@ -284,9 +281,7 @@ impl GameObject for Ball {
                     get_first_colliding_wall(&self.body, &other.get_body().hitbox);
 
                 if let Some(((w1, w2), _)) = colliding_wall_opt {
-                    let wall_vec = w2 - w1;
-                    let closer_normal = wall_vec.get_closer_normal(&self.body.prev_position);
-                    self.body.velocity = self.body.velocity.reflect_on(&closer_normal);
+                    self.body.velocity = self.body.velocity.reflect_on(&(w2 - w1).get_closer_normal(&self.body.prev_position));
                 }
             }
             CollisionType::Block => {
@@ -294,15 +289,10 @@ impl GameObject for Ball {
                     get_first_colliding_wall(&self.body, &other.get_body().hitbox);
 
                 if let Some(((w1, w2), _)) = colliding_wall_opt {
-                    let wall_vec = w2 - w1;
-                    let closer_normal = wall_vec.get_closer_normal(&self.body.prev_position);
-                    self.body.velocity = self.body.velocity.reflect_on(&closer_normal);
+                    self.body.velocity = self.body.velocity.reflect_on(&(w2 - w1).get_closer_normal(&self.body.prev_position));
 
                     other.despawn();
                 }
-            }
-            CollisionType::Player => {
-                // Player handles collision
             }
         }
     }

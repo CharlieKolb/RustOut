@@ -27,7 +27,7 @@ fn main() {
 
     let mut event_settings = EventSettings::new();
     event_settings.set_max_fps(144);
-    event_settings.set_ups(288);
+    event_settings.set_ups(144);
 
     let mut events = Events::new(event_settings);
     let mut gl = GlGraphics::new(opengl);

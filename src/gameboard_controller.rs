@@ -1,8 +1,4 @@
 //! Gameboard controller.
-
-use piston::input::GenericEvent;
-use piston::input::RenderEvent;
-use piston::window::WindowSettings;
 use piston::Event;
 
 use crate::gameboard::{Direction, Gameboard};
@@ -53,7 +49,7 @@ impl GameboardController {
                 }
             }
             Event::Loop(Loop::Update(UpdateArgs { dt })) => {
-                // println!("{:?}", e);
+                println!("{:?}", dt);
                 self.gameboard.update(*dt);
             }
             _ => (),

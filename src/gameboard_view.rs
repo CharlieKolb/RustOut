@@ -60,7 +60,7 @@ impl GameboardView {
 
     /// Draw gameboard.
     pub fn draw<G: Graphics>(&self, controller: &GameboardController, c: &Context, g: &mut G) {
-        use graphics::{Line, Rectangle};
+        use graphics::Rectangle;
         let ref board = controller.gameboard;
 
         let ref settings = self.settings;
