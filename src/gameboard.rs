@@ -8,8 +8,8 @@ Switch from rect-rect intersection to vector rect intersection for collision det
 
 */
 
-use crate::vec2;
-use vec2::Vec2;
+use crate::math;
+use math::{ Vec2, Segment };
 
 use std::f64;
 
@@ -40,6 +40,15 @@ impl Rectangle {
         }
     }
 
+    fn make_segments(&self) -> [Segment; 4] {
+        [
+            Segment(self.position, self.position + self.dimension.with_y(0.)),
+            Segment(self.position, self.position + self.dimension.with_x(0.)),
+            Segment(self.position.with_y(0.), self.position + self.dimension),
+            Segment(self.position.with_x(0.), self.position + self.dimension),
+        ]
+    }
+
     pub fn intersects(&self, o: &Rectangle) -> bool {
         let Vec2 { x, y } = self.position;
         let Vec2 { x: w, y: h } = self.dimension;
@@ -55,32 +64,16 @@ impl Rectangle {
     }
 
     // Return intersecting segments and the intersecting points
-    pub fn get_intersecting_segments(&self, start: &Vec2, end: &Vec2) -> Vec<((Vec2, Vec2), Vec2)> {
-        vec![
-            (
-                self.position.clone(),
-                self.position + Vec2::zero().set_x(self.dimension.x),
-            ),
-            (
-                self.position.clone(),
-                self.position + Vec2::zero().set_y(self.dimension.y),
-            ),
-            (
-                self.position + Vec2::zero().set_x(self.dimension.x),
-                self.position + self.dimension,
-            ),
-            (
-                self.position + Vec2::zero().set_y(self.dimension.y),
-                self.position + self.dimension,
-            ),
-        ]
-        .into_iter()
-        .filter_map(|(p1, p2)| {
-            let (_, point_opt) = vec2::segment_segment_distance(&p1, &p2, start, end);
-            if let Some(point) = point_opt { Some(((p1, p2), point)) }
-            else { None }
-        })
-        .collect()
+    pub fn get_intersecting_segments(&self, segment: &Segment) -> Vec<(Segment, Vec2)> {
+        self.make_segments()
+            .into_iter()
+            .filter_map(|&candidate| {
+                match math::segment_segment_distance(&candidate, &segment) {
+                    math::HitOrDistance::Hit(point) => Some((candidate, point)),
+                    _ => None,
+                }
+            })
+            .collect()
     }
 }
 
@@ -102,6 +95,10 @@ impl Body {
     pub fn apply_velocity(&mut self, delta: f64) {
         self.prev_position = self.hitbox.position.clone();
         self.hitbox.position += self.velocity * delta;
+    }
+
+    pub fn tick_segment(&self) -> Segment {
+        Segment(self.prev_position, self.hitbox.position)
     }
 }
 
@@ -129,15 +126,15 @@ pub struct Ball {
 #[allow(dead_code)]
 fn get_shortest_distance_segment(
     point: &Vec2,
-    segments: Vec<(Vec2, Vec2)>,
-) -> Option<(Vec2, Vec2)> {
+    segments: &Vec<Segment>,
+) -> Option<Segment> {
     let mut shortest_distance = f64::INFINITY;
     let mut result = None;
-    for (p1, p2) in segments {
-        let d = vec2::point_segment_distance(&point, &p1, &p2);
+    for &s in segments {
+        let d = math::point_segment_distance(&point, &s);
         if d < shortest_distance {
             shortest_distance = d;
-            result = Some((p1, p2));
+            result = Some(s);
         }
     }
 
@@ -147,39 +144,41 @@ fn get_shortest_distance_segment(
 // Returns None if there are no segments in the list
 fn get_shortest_distance_segment_with_intersection(
     point: &Vec2,
-    segments_with_intersection: Vec<((Vec2, Vec2), Vec2)>, // Vec of (segment, intersection_point)
-) -> Option<((Vec2, Vec2), Vec2)> {
+    segments_with_intersection: &Vec<(Segment, Vec2)>,
+) -> Option<(Segment, Vec2)> {
     let mut shortest_distance = f64::INFINITY;
     let mut result = None;
-    for ((p1, p2), intersect) in segments_with_intersection {
-        let d = vec2::point_segment_distance(&point, &p1, &p2);
+    for &tup in segments_with_intersection {
+        let d = math::point_segment_distance(&point, &tup.0);
         if d < shortest_distance {
             shortest_distance = d;
-            result = Some(((p1, p2), intersect));
+            result = Some(tup);
         }
     }
 
     result
 }
 
-fn get_first_colliding_wall(body: &Body, wall: &Rectangle) -> Option<((Vec2, Vec2), Vec2)> {
-    let width_vec = Vec2::zero().set_x(body.hitbox.dimension.x);
-    let height_vec = Vec2::zero().set_y(body.hitbox.dimension.y);
+fn get_first_collision_helper(body: &Body, rect: &Rectangle) -> Option<(Segment, Vec2)> {
+    let width_vec = Vec2::new(body.hitbox.dimension.x, 0.);
+    let height_vec = Vec2::new(0., body.hitbox.dimension.y);
+    let body_segment = body.tick_segment();
 
-    let mut segments = wall.get_intersecting_segments(&body.prev_position, &body.hitbox.position);
-    segments.append(&mut wall.get_intersecting_segments(
-        &(body.prev_position + width_vec),
-        &(body.hitbox.position + width_vec),
-    ));
-    segments.append(&mut wall.get_intersecting_segments(
-        &(body.prev_position + height_vec),
-        &(body.hitbox.position + height_vec),
-    ));
-    segments.append(&mut wall.get_intersecting_segments(
-        &(body.prev_position + body.hitbox.dimension),
-        &(body.hitbox.position + body.hitbox.dimension),
-    ));
-    get_shortest_distance_segment_with_intersection(&body.prev_position, segments)
+    get_shortest_distance_segment_with_intersection(
+        &body.prev_position,
+        &[Vec2::zero(), width_vec, height_vec, body.hitbox.dimension]
+            .into_iter()
+            .flat_map(|&v| rect.get_intersecting_segments(&(body_segment + v)))
+            .collect()
+    )
+}
+
+fn get_first_collision_point(body: &Body, rect: &Rectangle) -> Option<Vec2> {
+    get_first_collision_helper(&body, &rect).map(|(_, point)| point)
+}
+
+fn get_first_colliding_segment(body: &Body, rect: &Rectangle) -> Option<Segment> {
+    get_first_collision_helper(&body, &rect).map(|(seg, _)| seg)
 }
 
 impl GameObject for Player {
@@ -212,23 +211,16 @@ impl GameObject for Player {
     fn on_collision(&mut self, other: &mut GameObject) {
         match other.collision_type() {
             CollisionType::Wall => {
-                let colliding_wall_opt =
-                    get_first_colliding_wall(&self.body, &other.get_body().hitbox);
-
-                if let Some((_, point)) = colliding_wall_opt
+                if let Some(point) = get_first_collision_point(&self.body, &other.get_body().hitbox)
                 {
                     match self.direction {
                         Direction::Left => {
                             self.body.prev_position = self.body.hitbox.position;
-                            self.body.hitbox.position = self.body.hitbox.position.set_x(point.x);
+                            self.body.hitbox.position.x = point.x;
                         }
                         Direction::Right => {
                             self.body.prev_position = self.body.hitbox.position;
-                            self.body.hitbox.position = self
-                                .body
-                                .hitbox
-                                .position
-                                .set_x(point.x - self.body.hitbox.dimension.x);
+                            self.body.hitbox.position.x = point.x - self.body.hitbox.dimension.x;
                         }
                         _ => (),
                     }
@@ -278,17 +270,16 @@ impl GameObject for Ball {
         match other.collision_type() {
             CollisionType::Wall | CollisionType::Movable => {
                 let colliding_wall_opt =
-                    get_first_colliding_wall(&self.body, &other.get_body().hitbox);
+                get_first_colliding_segment(&self.body, &other.get_body().hitbox);
 
-                if let Some(((w1, w2), _)) = colliding_wall_opt {
+                if let Some(Segment(w1, w2)) = colliding_wall_opt {
                     self.body.velocity = self.body.velocity.reflect_on(&(w2 - w1).get_closer_normal(&self.body.prev_position));
                 }
             }
             CollisionType::Block => {
-                let colliding_wall_opt =
-                    get_first_colliding_wall(&self.body, &other.get_body().hitbox);
+                let colliding_wall_opt = get_first_colliding_segment(&self.body, &other.get_body().hitbox);
 
-                if let Some(((w1, w2), _)) = colliding_wall_opt {
+                if let Some(Segment(w1, w2)) = colliding_wall_opt {
                     self.body.velocity = self.body.velocity.reflect_on(&(w2 - w1).get_closer_normal(&self.body.prev_position));
 
                     other.despawn();
@@ -486,10 +477,11 @@ impl Gameboard {
         }
 
         for block in &mut self.blocks {
-            let before = self.ball.body.velocity.clone();
+            let before = self.ball.body.velocity;
             if self.ball.body.hitbox.intersects(&block.body.hitbox) {
                 self.ball.on_collision(block)
             }
+            // Only ever hit one ball per tick
             if before != self.ball.body.velocity {
                 break;
             }
@@ -507,10 +499,10 @@ mod tests {
         let point: Vec2 = Vec2::zero();
 
         let segments = vec![
-            (Vec2::new(5., 5.), Vec2::new(4., 4.)),
-            (Vec2::new(5., 5.), Vec2::new(6., 6.)),
+            Segment(Vec2::new(5., 5.), Vec2::new(4., 4.)),
+            Segment(Vec2::new(5., 5.), Vec2::new(6., 6.)),
         ];
-        let result = get_shortest_distance_segment(&point, segments);
-        assert_eq!(result, Some((Vec2::new(5., 5.), Vec2::new(4., 4.))));
+        let result = get_shortest_distance_segment(&point, &segments);
+        assert_eq!(result, Some(Segment(Vec2::new(5., 5.), Vec2::new(4., 4.))));
     }
 }

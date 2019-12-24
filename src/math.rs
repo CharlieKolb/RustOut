@@ -2,12 +2,6 @@ use std::{ f64, ops };
 
 static CMP_EPSILON : f64 = 0.000000000000001f64;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub struct Vec2 {
-    pub x: f64,
-    pub y: f64,
-}
-
 pub fn clamp<T: PartialOrd>(val: T, low: T, high: T) -> T {
     if val < low {
         return low;
@@ -18,56 +12,66 @@ pub fn clamp<T: PartialOrd>(val: T, low: T, high: T) -> T {
     }
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct Vec2 {
+    pub x: f64,
+    pub y: f64,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct Segment(pub Vec2, pub Vec2);
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum HitOrDistance {
+    Hit(Vec2),
+    Distance(f64),
+}
+
 // According to https://stackoverflow.com/a/1501725
-pub fn point_segment_distance(point: &Vec2, start: &Vec2, end: &Vec2) -> f64 {
-    let segment = end - start;
+pub fn point_segment_distance(point: &Vec2, s: &Segment) -> f64 {
+    let segment = s.1 - s.0;
     let s2 = segment.length_squared();
 
     // case start == end
-    let ls_to_p = point - start;
+    let ls_to_p = point - &s.0;
 
     if s2 == 0. {
         return ls_to_p.length();
     }
 
     let t = clamp(ls_to_p.dot(&segment) / s2, 0., 1.);
-    let projection = (*start) + t * segment;
+    let projection = s.0 + t * segment;
     (*point - projection).length()
 }
 
 // Return distance and intersection point if distance is 0.
 // According to https://stackoverflow.com/a/1968345
-pub fn segment_segment_distance(
-    p1_s: &Vec2,
-    p1_e: &Vec2,
-    p2_s: &Vec2,
-    p2_e: &Vec2,
-) -> (f64, Option<Vec2>) {
-    let s1 = p1_e - p1_s;
-    let s2 = p2_e - p2_s;
+pub fn segment_segment_distance( 
+    s1: &Segment,
+    s2: &Segment,
+) -> HitOrDistance {
+    let a1 = s1.1 - s1.0;
+    let a2 = s2.1 - s2.0;
 
     // potential div by 0!
-    let s = (-s1.y * (p1_s.x - p2_s.x) + s1.x * (p1_s.y - p2_s.y)) / (-s2.x * s1.y + s1.x * s2.y);
+    let s = (-a1.y * (s1.0.x - s2.0.x) + a1.x * (s1.0.y - s2.0.y)) / (-a2.x * a1.y + a1.x * a2.y);
 
-    let t = (s2.x * (p1_s.y - p2_s.y) - s2.y * (p1_s.x - p2_s.x)) / (-s2.x * s1.y + s1.x * s2.y);
+    let t = (a2.x * (s1.0.y - s2.0.y) - a2.y * (s1.0.x - s2.0.x)) / (-a2.x * a1.y + a1.x * a2.y);
 
     if s >= 0. && s <= 1. && t >= 0. && t <= 1. {
-        (
-            0.,
-            Some(Vec2::new(p1_s.x + (t * s1.x), p1_s.y + (t * s1.y))),
-        )
+        HitOrDistance::Hit(s1.0 + t * a1)
     } else {
         // no collision
-        let dist = [
-            point_segment_distance(p1_s, p2_s, p2_e),
-            point_segment_distance(p1_e, p2_s, p2_e),
-            point_segment_distance(p2_s, p1_s, p1_e),
-            point_segment_distance(p2_e, p1_s, p1_e),
-        ]
-        .iter()
-        .fold(f64::INFINITY, |a, &b| a.min(b));
-
-        (dist, None)
+        HitOrDistance::Distance(
+            [
+                point_segment_distance(&s1.0, &s2),
+                point_segment_distance(&s1.1, &s2),
+                point_segment_distance(&s2.0, &s1),
+                point_segment_distance(&s2.1, &s1),
+            ]
+            .iter()
+            .fold(f64::INFINITY, |a, &b| a.min(b))
+        )
     }
 }
 
@@ -91,7 +95,7 @@ impl Vec2 {
     pub fn to_norm(&self) -> Self {
         let l = self.length();
         if l == 0. {
-            return Vec2::zero();
+            return Vec2::new(0., 0.);
         }
         self / self.length()
     }
@@ -130,14 +134,12 @@ impl Vec2 {
         self.to_rotated_rad(deg / 180. * f64::consts::PI) / f64::consts::PI * 180.
     }
 
-    pub fn set_x(mut self, x: f64) -> Self {
-        self.x = x;
-        self
+    pub fn with_x(&self, x: f64) -> Self {
+        Self { x, y: self.y }
     }
 
-    pub fn set_y(mut self, y: f64) -> Self {
-        self.y = y;
-        self
+    pub fn with_y(&self, y: f64) -> Self {
+        Self { x: self.x, y }
     }
 
     pub fn set_length(mut self, new_length: f64) -> Self {
@@ -310,6 +312,22 @@ impl ops::DivAssign<f64> for Vec2 {
     }
 }
 
+impl ops::Add<Vec2> for Segment {
+    type Output = Segment;
+
+    fn add(self, vec: Vec2) -> Segment {
+        Segment(self.0 + vec, self.1 + vec)
+    }
+}
+
+impl ops::Add<Vec2> for &Segment {
+    type Output = Segment;
+
+    fn add(self, vec: Vec2) -> Segment {
+        Segment(self.0 + vec, self.1 + vec)
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -323,7 +341,7 @@ mod tests {
         let line_start = Vec2::new(0., 2.);
         let line_end = Vec2::new(0., -4.);
 
-        let result = point_segment_distance(&point, &line_start, &line_end);
+        let result = point_segment_distance(&point, &Segment(line_start, line_end));
 
         assert_eq!(result, 2.5);
     }
@@ -331,49 +349,40 @@ mod tests {
     #[test]
     fn test_point_line_distance_01() {
         let point = Vec2::new(5.5, 0.);
+        let line = Segment(Vec2::new(5., 2.), Vec2::new(5., -4.));
 
-        let line_start = Vec2::new(5., 2.);
-        let line_end = Vec2::new(5., -4.);
-
-        let result = point_segment_distance(&point, &line_start, &line_end);
+        let result = point_segment_distance(&point, &line);
 
         assert_eq!(result, 0.5);
     }
 
     #[test]
     fn test_segment_segment_distance_contact() {
-        let l1_start = Vec2::new(5., 0.);
-        let l1_end = Vec2::new(6., 0.);
+        let s1 = Segment(Vec2::new(5., 0.), Vec2::new(6., 0.));
+        let s2 = Segment(Vec2::new(5., 2.), Vec2::new(5., -4.));
 
-        let l2_start = Vec2::new(5., 2.);
-        let l2_end = Vec2::new(5., -4.);
+        let result = segment_segment_distance(&s1, &s2);
 
-        let result = segment_segment_distance(&l1_start, &l1_end, &l2_start, &l2_end);
-
-        assert_eq!(result, (0., Some(Vec2::new(5., 0.))));
+        assert_eq!(result, HitOrDistance::Hit(Vec2::new(5., 0.)));
     }
 
     #[test]
     fn test_segment_segment_distance_no_contact() {
-        let l1_start = Vec2::new(-1., 0.);
-        let l1_end = Vec2::new(6., 0.);
+        let s1 = Segment(Vec2::new(-1., 0.), Vec2::new(6., 0.));
+        let s2 = Segment(Vec2::new(-5., 2.), Vec2::new(-5., -4.));
 
-        let l2_start = Vec2::new(-5., 2.);
-        let l2_end = Vec2::new(-5., -4.);
+        let result = segment_segment_distance(&s1, &s2);
 
-        let result = segment_segment_distance(&l1_start, &l1_end, &l2_start, &l2_end);
-
-        assert_eq!(result, (4.0, None));
+        assert_eq!(result, HitOrDistance::Distance(4.0));
     }
 
     #[test]
     fn test_point_line_distance_02() {
-        let line_start = Vec2::new(-1., 0.);
-        let line_end = Vec2::new(6., 0.);
+        let s = Segment(Vec2::new(-1., 0.), Vec2::new(6., 0.));
 
         let point = Vec2::new(-5., 0.);
 
-        let result = point_segment_distance(&point, &line_start, &line_end);
+        let result = point_segment_distance(&point, &s);
 
         assert_eq!(result, 4.);
     }

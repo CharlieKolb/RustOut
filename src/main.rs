@@ -16,7 +16,7 @@ pub use crate::gameboard_view::{GameboardView, GameboardViewSettings};
 mod gameboard;
 mod gameboard_controller;
 mod gameboard_view;
-mod vec2;
+mod math;
 
 fn main() {
     let opengl = OpenGL::V3_2;

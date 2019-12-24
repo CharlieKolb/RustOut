@@ -49,7 +49,7 @@ impl GameboardController {
                 }
             }
             Event::Loop(Loop::Update(UpdateArgs { dt })) => {
-                println!("{:?}", dt);
+                // println!("{:?}", dt);
                 self.gameboard.update(*dt);
             }
             _ => (),
