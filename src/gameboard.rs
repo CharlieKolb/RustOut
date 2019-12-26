@@ -108,7 +108,7 @@ trait GameObject {
     fn update(&mut self, delta: f64);
 
     fn collision_type(&self) -> CollisionType;
-    fn on_collision(&mut self, other: &mut GameObject);
+    fn on_collision(&mut self, other: &mut dyn GameObject);
 
     fn despawn(&mut self);
 }
@@ -122,26 +122,6 @@ pub struct Ball {
     pub body: Body,
 }
 
-// ToDo: Duplicate code; how to propagate the intersection as option? Probably use with fold to find the closest one instead?
-#[allow(dead_code)]
-fn get_shortest_distance_segment(
-    point: &Vec2,
-    segments: &Vec<Segment>,
-) -> Option<Segment> {
-    let mut shortest_distance = f64::INFINITY;
-    let mut result = None;
-    for &s in segments {
-        let d = math::point_segment_distance(&point, &s);
-        if d < shortest_distance {
-            shortest_distance = d;
-            result = Some(s);
-        }
-    }
-
-    result
-}
-
-// Returns None if there are no segments in the list
 fn get_shortest_distance_segment_with_intersection(
     point: &Vec2,
     segments_with_intersection: &Vec<(Segment, Vec2)>,
@@ -149,7 +129,8 @@ fn get_shortest_distance_segment_with_intersection(
     let mut shortest_distance = f64::INFINITY;
     let mut result = None;
     for &tup in segments_with_intersection {
-        let d = math::point_segment_distance(&point, &tup.0);
+        // let d = math::point_segment_distance(&point, &tup.0);
+        let d = (point - &tup.1).length_squared();
         if d < shortest_distance {
             shortest_distance = d;
             result = Some(tup);
@@ -208,7 +189,7 @@ impl GameObject for Player {
         CollisionType::Wall
     }
 
-    fn on_collision(&mut self, other: &mut GameObject) {
+    fn on_collision(&mut self, other: &mut dyn GameObject) {
         match other.collision_type() {
             CollisionType::Wall => {
                 if let Some(point) = get_first_collision_point(&self.body, &other.get_body().hitbox)
@@ -266,7 +247,7 @@ impl GameObject for Ball {
         CollisionType::Movable
     }
 
-    fn on_collision(&mut self, other: &mut GameObject) {
+    fn on_collision(&mut self, other: &mut dyn GameObject) {
         match other.collision_type() {
             CollisionType::Wall | CollisionType::Movable => {
                 let colliding_wall_opt =
@@ -310,7 +291,7 @@ impl GameObject for Wall {
         CollisionType::Wall
     }
 
-    fn on_collision(&mut self, _: &mut GameObject) {}
+    fn on_collision(&mut self, _: &mut dyn GameObject) {}
 
     fn despawn(&mut self) {}
 }
@@ -345,13 +326,14 @@ impl GameObject for Block {
         return &mut self.body;
     }
 
-    fn update(&mut self, _: f64) {}
+    fn update(&mut self, _: f64) {
+    }
 
     fn collision_type(&self) -> CollisionType {
         CollisionType::Block
     }
 
-    fn on_collision(&mut self, _: &mut GameObject) {}
+    fn on_collision(&mut self, _: &mut dyn GameObject) {}
 
     fn despawn(&mut self) {
         self.body.hitbox.position = Vec2::new(-1000., -1000.)
@@ -461,6 +443,9 @@ impl Gameboard {
     pub fn update(&mut self, delta: f64) {
         self.player.update(delta);
         self.ball.update(delta);
+        // for block in &mut self.blocks {
+        //     block.update(delta);
+        // }
 
         if self.player.body.hitbox.intersects(&self.ball.body.hitbox) {
             self.player.on_collision(&mut self.ball);
@@ -477,32 +462,11 @@ impl Gameboard {
         }
 
         for block in &mut self.blocks {
-            let before = self.ball.body.velocity;
             if self.ball.body.hitbox.intersects(&block.body.hitbox) {
-                self.ball.on_collision(block)
-            }
-            // Only ever hit one ball per tick
-            if before != self.ball.body.velocity {
+                self.ball.on_collision(block);
+                // Only ever hit one ball per tick
                 break;
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use super::*;
-
-    #[test]
-    fn test_get_shortest_distance_segment() {
-        let point: Vec2 = Vec2::zero();
-
-        let segments = vec![
-            Segment(Vec2::new(5., 5.), Vec2::new(4., 4.)),
-            Segment(Vec2::new(5., 5.), Vec2::new(6., 6.)),
-        ];
-        let result = get_shortest_distance_segment(&point, &segments);
-        assert_eq!(result, Some(Segment(Vec2::new(5., 5.), Vec2::new(4., 4.))));
     }
 }
